@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {listMyChartByPageUsingPOST} from "@/services/bi-backend/chartController";
-import {Avatar, Card, List, message} from "antd";
+import {Avatar, Card, List, message, Result} from "antd";
 import ReactECharts from "echarts-for-react";
 import {useModel} from "@@/exports";
 import Search from "antd/es/input/Search";
@@ -16,6 +16,10 @@ const MyChartPage: React.FC = () => {
     current: 1,
     // 每页展示4条数据
     pageSize: 4,
+    //设置按创建时间排序
+    sortField: 'createTime',
+    // 进行继续排序
+    sortOrder: 'desc',
   };
   /*
     定义了一个状态(searchParams)和它对应的更新函数(setSearchParams)，并初始化为initSearchParams;
@@ -44,11 +48,15 @@ const MyChartPage: React.FC = () => {
         if (res.data.records) {
           res.data.records.forEach(data => {
             // 要把后端返回的图表字符串改为对象数组,如果后端返回空字符串，就返回'{}'
-            const chartOption = JSON.parse(data.genChart ?? '{}');
-            // 把标题设为undefined
-            chartOption.title = undefined;
-            // 然后把修改后的数据转换为json设置回去
-            data.genChart = JSON.stringify(chartOption);
+            //如果状态为succeed，才会解析图表代码
+            if (data.status === 'succeed'){
+              const chartOption = JSON.parse(data.genChart ?? '{}');
+              // 把标题设为undefined
+              chartOption.title = undefined;
+              // 然后把修改后的数据转换为json设置回去
+              data.genChart = JSON.stringify(chartOption);
+            }
+
           })
         }
       } else {
@@ -136,12 +144,50 @@ const MyChartPage: React.FC = () => {
                 title={item.name}
                 description={item.chartType ? '图表类型：' + item.chartType : undefined}
               />
-              {/* 在元素的下方增加16像素的外边距 */}
-              <div style={{ marginBottom: 16 }} />
-              <p>{'分析目标：' + item.goal}</p>
-              {/* 在元素的下方增加16像素的外边距 */}
-              <div style={{ marginBottom: 16 }} />
-              <ReactECharts option={item.genChart && JSON.parse(item.genChart)} />
+              <>
+                {
+                  // 当状态（item.status）为'wait'时，显示待生成的结果组件
+                  item.status === 'wait' && <>
+                    <Result
+                      // 状态为警告
+                      status="warning"
+                      title="待生成"
+                      // 子标题显示执行消息，如果执行消息为空，则显示'当前图表生成队列繁忙，请耐心等候'
+                      subTitle={item.execMessage ?? '当前图表生成队列繁忙，请耐心等候'}
+                    />
+                  </>
+                }
+                {
+                  item.status === 'running' && <>
+                    <Result
+                      // 状态为信息
+                      status="info"
+                      title="图表生成中"
+                      // 子标题显示执行消息
+                      subTitle={item.execMessage}
+                    />
+                  </>
+                }
+                {
+                  // 当状态（item.status）为'succeed'时，显示生成的图表
+                  item.status === 'succeed' && <>
+                    <div style={{ marginBottom: 16 }} />
+                    <p>{'分析目标：' + item.goal}</p>
+                    <div style={{ marginBottom: 16 }} />
+                    <ReactECharts option={item.genChart && JSON.parse(item.genChart)} />
+                  </>
+                }
+                {
+                  // 当状态（item.status）为'failed'时，显示生成失败的结果组件
+                  item.status === 'failed' && <>
+                    <Result
+                      status="error"
+                      title="图表生成失败"
+                      subTitle={item.execMessage}
+                    />
+                  </>
+                }
+              </>
             </Card>
           </List.Item>
         )}
